@@ -134,6 +134,45 @@ yargs.command({
 })
 
 yargs.command({
+    command: 'duplicateDashboardAcross',
+    describe: 'Duplicate question across environments',
+    builder: {
+        dashboardId: {
+            describe: 'Dashboard on source Metabase instance that will be duplicated on destination Metabase instance',
+            demandOption: true,
+            type: 'number'
+        },
+        collectionId: {
+            describe: 'Destination collection id of new dashboard',
+            demandOption: true,
+            type: 'number'
+        },
+        databaseId: {
+            describe: 'Destination Database ID for new questions under dashboard',
+            demandOption: true,
+            type: 'number'
+        }
+    },
+    async handler(argv) {
+        try {
+            const response = await metabase_async_await.duplicateDashboardAcross(argv.dashboardId, argv.collectionId, argv.databaseId)
+            console.log("\n--------New Dashboard Created!-------")
+            console.log("Response status code", response.status, response.statusText)
+            console.log("ID:", response.data.id)
+            console.log("Name:", response.data.name)
+            console.log("Updated At:", response.data.updated_at)
+        } catch (error) {
+            if (error.response) {
+                console.log("\nError!", error.response.status, error.response.statusText);
+                console.log(error.response.data);
+            } else{
+                console.log(error);
+            }
+        }   
+    }
+})
+
+yargs.command({
     command: 'update-deprecated',
     describe: 'Update question',
     builder: {
