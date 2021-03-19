@@ -13,23 +13,23 @@ const {
 } = process.env;
 
 async function update(originQuestionId, destinationQuestionId, destinationDatabaseId) {
-  console.log("Authenticating",username);
+  console.log("Authenticating", username);
   const axiosConfig = await auth();
   console.log("Successfully authenticated with token", axiosConfig.headers);
 
   console.log("Retrieving question id", originQuestionId);
-  const {visualization_settings, description, enable_embedding,
+  const { visualization_settings, description, enable_embedding,
     result_metadata, dataset_query, display, embedding_params, } = await getQuestion(originQuestionId, axiosConfig);
 
   dataset_query.database = destinationDatabaseId;
   const body = {
-          visualization_settings,
-          description,
-          result_metadata,
-          dataset_query,
-          display,
-          enable_embedding,
-          embedding_params
+    visualization_settings,
+    description,
+    result_metadata,
+    dataset_query,
+    display,
+    enable_embedding,
+    embedding_params
   };
 
   console.log("\nUpdating question id", destinationQuestionId);
@@ -41,18 +41,18 @@ async function update(originQuestionId, destinationQuestionId, destinationDataba
 }
 
 async function duplicate(questionId, collectionId, questionName, databaseId) {
-  console.log("Authenticating",username);
+  console.log("Authenticating", username);
   const axiosConfig = await auth();
   console.log("Successfully authenticated with token", axiosConfig.headers);
 
   console.log("Retrieving question id", questionId);
-  const {visualization_settings, description, enable_embedding, collection_position,
-     result_metadata, dataset_query, display, embedding_params, name:oldName } = await getQuestion(questionId, axiosConfig);
+  const { visualization_settings, description, enable_embedding, collection_position,
+    result_metadata, dataset_query, display, embedding_params, name: oldName } = await getQuestion(questionId, axiosConfig);
   dataset_query.database = databaseId;
 
   var name = questionName;
   if (!name) {
-      name = oldName;
+    name = oldName;
   }
 
   const body = {
@@ -85,8 +85,8 @@ async function duplicateAcross(questionId, collectionId, questionName, databaseI
   console.log("Successfully authenticated to destination with token", axiosConfigDestination.headers);
 
   console.log("From source retrieving question id", questionId);
-  const {visualization_settings, description, enable_embedding, collection_position,
-     result_metadata, dataset_query, display, embedding_params, name:oldName } = await getQuestion(questionId, axiosConfigSource);
+  const { visualization_settings, description, enable_embedding, collection_position,
+    result_metadata, dataset_query, display, embedding_params, name: oldName } = await getQuestion(questionId, axiosConfigSource);
   dataset_query.database = databaseId;
 
   const name = questionName ? questionName : oldName;
@@ -112,7 +112,7 @@ async function duplicateAcross(questionId, collectionId, questionName, databaseI
 }
 
 async function duplicateQuestions(questions, baseUrl, axiosConfigSource, axiosConfigDestination, collectionId, databaseId) {
-  const duplicateCardPromises = questions.map( async question => {
+  const duplicateCardPromises = questions.map(async question => {
     const prevQuestion = await getQuestion(question.id, axiosConfigSource).catch(err => {
       console.error(err);
       throw err;
@@ -178,7 +178,7 @@ async function duplicateDashboard(dashboard, name, description, parameters, coll
 };
 
 async function addCardsToDashboard(urlBase, cards, dashboard, axiosConfig) {
-  const assignmentPromises = cards.map( card  => {
+  const assignmentPromises = cards.map(card => {
     const url = `${urlBase}/dashboard/${dashboard.id}/cards`;
     const body = {
       cardId: card.id
@@ -190,7 +190,27 @@ async function addCardsToDashboard(urlBase, cards, dashboard, axiosConfig) {
     return axios.post(url, body, axiosConfig);
   });
 
-  return Promise.all(assignmentPromises);
+  return Promise.all(assignmentPromises).then(responses => responses.map(response => response.data));
+};
+
+async function updatePositionOfCardsOnDashboard(cardPositions, originalCards, urlBase, axiosConfig, dashboard) {
+  const cards = originalCards.map((card, index) => {
+    return {
+      ...cardPositions[index],
+      id: card.id,
+      card_id: card.card_id
+    }
+  });
+
+  const body = {
+    cards
+  };
+
+  console.log(`Updating position of cards...`);
+  console.log(body);
+  const url = `${urlBase}/dashboard/${dashboard.id}/cards`;
+
+  return axios.put(url, body, axiosConfig);
 };
 
 
@@ -211,11 +231,17 @@ async function duplicateDashboardAcross(dashboardId, collectionId, databaseId) {
   const response = await duplicateDashboard(originalDashboard, name, description, parameters, collectionId, collection_position, DESTINATION_METABASE_BASE_URL, axiosConfigDestination);
   const dashboard = response.data;
 
+  // filter out text blurbs
+  const cardsToDuplicate = originalDashboard.ordered_cards.filter(card => card.card_id !== null);
+
   // duplicate the questions
-  const newQuestions = await duplicateQuestions(originalDashboard.ordered_cards, DESTINATION_METABASE_BASE_URL, axiosConfigSource, axiosConfigDestination, collectionId, databaseId);
+  const newQuestions = await duplicateQuestions(cardsToDuplicate, DESTINATION_METABASE_BASE_URL, axiosConfigSource, axiosConfigDestination, collectionId, databaseId);
 
   // assign cards to dashboard
-  await addCardsToDashboard(DESTINATION_METABASE_BASE_URL, newQuestions, dashboard, axiosConfigDestination);
+  const newCards = await addCardsToDashboard(DESTINATION_METABASE_BASE_URL, newQuestions, dashboard, axiosConfigDestination);
+  console.log("NEWCARDS", newCards);
+
+  await updatePositionOfCardsOnDashboard(cardsToDuplicate, newCards, DESTINATION_METABASE_BASE_URL, axiosConfigDestination, dashboard);
 
   const updatedDashboard = await getDashboard(dashboard.id, axiosConfigDestination, DESTINATION_METABASE_BASE_URL);
 
@@ -228,69 +254,69 @@ async function duplicateDashboardAcross(dashboardId, collectionId, databaseId) {
 
 async function destinationAuth() {
   try {
-      const authResponse = await axios({
-          method: 'post',
-          url: DESTINATION_METABASE_BASE_URL+ "/session",
-          data: {
-              username: DESTINATION_METABASE_USERNAME,
-              password: DESTINATION_METABASE_PASSWORD
-          }
-      });
-      const token = authResponse.data.id;
-      const axiosConfig = {
-          headers: {
-              "X-Metabase-Session": token
-          }
-      };
+    const authResponse = await axios({
+      method: 'post',
+      url: DESTINATION_METABASE_BASE_URL + "/session",
+      data: {
+        username: DESTINATION_METABASE_USERNAME,
+        password: DESTINATION_METABASE_PASSWORD
+      }
+    });
+    const token = authResponse.data.id;
+    const axiosConfig = {
+      headers: {
+        "X-Metabase-Session": token
+      }
+    };
 
-      return axiosConfig;
+    return axiosConfig;
   } catch (error) {
-      console.log("error", error.response.status);
-      return
+    console.log("error", error.response.status);
+    return
   }
 }
 
 async function auth() {
   try {
-      const authResponse = await axios({
-          method: 'post',
-          url: baseUrl+ "/session",
-          data: {
-              username: username,
-              password: password
-          }
-      });
-      const token = authResponse.data.id;
-      const axiosConfig = {
-          headers: {
-              "X-Metabase-Session": token
-          }
-      };
+    const authResponse = await axios({
+      method: 'post',
+      url: baseUrl + "/session",
+      data: {
+        username: username,
+        password: password
+      }
+    });
+    const token = authResponse.data.id;
+    const axiosConfig = {
+      headers: {
+        "X-Metabase-Session": token
+      }
+    };
 
-      return axiosConfig;
+    return axiosConfig;
   } catch (error) {
-      console.log("error", error.response.status);
-      return
+    console.log("error", error.response.status);
+    return
   }
 }
 
 async function getQuestion(id, axiosConfig) {
   try {
-      const url = baseUrl + "/card/" + id;
-      const questionResponse = await axios.get(url, axiosConfig);
-      return questionResponse.data;
+    const url = baseUrl + "/card/" + id;
+    const questionResponse = await axios.get(url, axiosConfig);
+    return questionResponse.data;
   } catch (error) {
-      console.log("Error retrieving question", error.response.status);
+    console.log("Error retrieving question", error.response.status);
   }
 }
 
 async function getDashboard(id, axiosConfig, urlBase) {
   try {
-      const url = urlBase + "/dashboard/" + id;
-      const dashboardResponse = await axios.get(url, axiosConfig);
-      return dashboardResponse.data;
+    const url = urlBase + "/dashboard/" + id;
+    const dashboardResponse = await axios.get(url, axiosConfig);
+    return dashboardResponse.data;
   } catch (error) {
-      console.log("Error retrieving question", error.response.status);
+    console.log("Error retrieving question", error.response.status);
   }
 }
 
